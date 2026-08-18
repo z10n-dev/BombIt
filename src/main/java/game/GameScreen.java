@@ -1,18 +1,15 @@
 package game;
 
-import application.GameApp;
 import screen_framework.Screen;
 import screen_framework.ScreenHandler;
 
+
 public class GameScreen implements Screen {
 
-    ScreenHandler screenHandler;
-    GameApp app;
+    private final ScreenHandler screenHandler;
 
-    public GameScreen(ScreenHandler screenHandler, GameApp app) {
+    public GameScreen(ScreenHandler screenHandler) {
         this.screenHandler = screenHandler;
-        this.app = app;
-        app.clear();
     }
 
     @Override
@@ -22,7 +19,12 @@ public class GameScreen implements Screen {
 
     @Override
     public void draw() {
-        app.text("Test", 100, 100);
+    }
+
+    private void drawHud() {
+    }
+
+    private void drawGameOver() {
     }
 
     @Override
@@ -32,6 +34,11 @@ public class GameScreen implements Screen {
 
     @Override
     public void keyPressed(char key) {
+
+    }
+
+    @Override
+    public void keyReleased(char key) {
 
     }
 }

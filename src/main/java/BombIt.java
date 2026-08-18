@@ -1,34 +1,18 @@
-import application.GameApp;
 import processing.core.PApplet;
 import screen_framework.ScreenHandler;
-import settings.Settings;
 
-public class BombIt extends GameApp {
+public class BombIt extends PApplet {
 
-    private ScreenHandler screenHandler;
+    private ScreenHandler screenHandler = new ScreenHandler();
 
     public static void main(String[] args) {
         PApplet.main("BombIt");
     }
 
     @Override
-    public void settings() {
-        size(Settings.WINDOW_WIDTH, Settings.WINDOW_HEIGHT);
-    }
-
-    @Override
-    public void setup() {
-        screenHandler = new ScreenHandler(this);
-    }
-
-    @Override
     public void draw() {
         screenHandler.update();
-
-        pushMatrix();
-        scale(Settings.SCALE_FACTOR);
         screenHandler.draw();
-        popMatrix();
     }
 
     @Override
@@ -37,10 +21,15 @@ public class BombIt extends GameApp {
     }
 
     @Override
+    public void keyReleased() {
+        screenHandler.keyReleased(key);
+    }
+
+    @Override
     public void mousePressed() {
         screenHandler.mousePressed(
-                Settings.toGameCoordinate(mouseX),
-                Settings.toGameCoordinate(mouseY)
+                mouseX,
+                mouseY
         );
     }
 }

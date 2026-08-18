@@ -5,4 +5,5 @@ public interface Screen {
     void draw();
     void mousePressed(int x, int y);
     void keyPressed(char key);
+    void keyReleased(char key);
 }
