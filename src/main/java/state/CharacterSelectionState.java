@@ -17,6 +17,7 @@ public class CharacterSelectionState extends GameState{
     private final Character[] characters = Character.values();
     private final List<HoverCard> cards = new ArrayList<>();
     private int selectedIndex;
+    private final Button button;
 
     public CharacterSelectionState(GameContext gameContext) {
         super(gameContext);
@@ -37,6 +38,17 @@ public class CharacterSelectionState extends GameState{
                     () -> select(index)
             ));
         }
+
+        button = new Button(
+                Viewport.WIDTH / 2f - 325,
+                850,
+                650,
+                80,
+                "START GAME WITH " + characters[selectedIndex].getDisplayName().toUpperCase(),
+                () -> {
+                    startGame(characters[selectedIndex]);
+                }
+        );
 
         select(0);
     }
@@ -59,7 +71,7 @@ public class CharacterSelectionState extends GameState{
 
     @Override
     public void update() {
-
+        button.setLabel("START GAME WITH " + characters[selectedIndex].getDisplayName().toUpperCase());
     }
 
     @Override
@@ -72,16 +84,7 @@ public class CharacterSelectionState extends GameState{
         for (HoverCard card : cards) {
             card.draw(app, gameContext.getViewport().screenToGameX(app.mouseX), gameContext.getViewport().screenToGameY(app.mouseY));
         }
-        new Button(
-                Viewport.WIDTH / 2f - 325,
-                850,
-                650,
-                80,
-                "START GAME WITH " + characters[selectedIndex].getDisplayName().toUpperCase(),
-                () -> {
-                    startGame(characters[selectedIndex]);
-                }
-        ).draw(app, gameContext.getViewport().screenToGameX(app.mouseX), gameContext.getViewport().screenToGameY(app.mouseY));
+        button.draw(app, gameContext.getViewport().screenToGameX(app.mouseX), gameContext.getViewport().screenToGameY(app.mouseY));
     }
 
     @Override
@@ -92,6 +95,7 @@ public class CharacterSelectionState extends GameState{
         for (HoverCard card : cards) {
             card.mousePressed(gameMouseX, gameMouseY);
         }
+        button.mousePressed(gameMouseX, gameMouseY);
     }
 
     @Override

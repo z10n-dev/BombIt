@@ -9,7 +9,7 @@ public final class Button {
     private final float y;
     private final float width;
     private final float height;
-    private final String label;
+    private String label;
     private final Runnable onClick;
 
     private boolean enabled = true;
@@ -59,5 +59,9 @@ public final class Button {
 
     public void setEnabled(boolean enabled) {
         this.enabled = enabled;
+    }
+
+    public void setLabel(String label) {
+        this.label = label;
     }
 }
