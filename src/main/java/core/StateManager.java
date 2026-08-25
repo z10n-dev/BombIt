@@ -21,15 +21,15 @@ public class StateManager {
         }
     }
 
-    public void keyPressed(char key) {
+    public void keyPressed(char key, int keyCode) {
         if (currentState != null) {
-            currentState.keyPressed(key);
+            currentState.keyPressed(key, keyCode);
         }
     }
 
-    public void keyReleased(char key) {
+    public void keyReleased(char key, int keyCode) {
         if (currentState != null) {
-            currentState.keyReleased(key);
+            currentState.keyReleased(key, keyCode);
         }
     }
 

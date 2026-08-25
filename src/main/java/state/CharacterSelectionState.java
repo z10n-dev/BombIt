@@ -2,6 +2,10 @@ package state;
 
 import core.GameContext;
 import core.Viewport;
+import game.ControllerType;
+import game.GameConfig;
+import game.GameMode;
+import game.PlayerConfig;
 import player.Character;
 import processing.core.PApplet;
 import style.Colors;
@@ -10,17 +14,25 @@ import ui.HoverCard;
 import ui.Typography;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Random;
 
-public class CharacterSelectionState extends GameState{
+public class CharacterSelectionState extends GameState {
 
     private final Character[] characters = Character.values();
     private final List<HoverCard> cards = new ArrayList<>();
-    private int selectedIndex;
-    private final Button button;
+    private final List<Character> selections = new ArrayList<>();
 
-    public CharacterSelectionState(GameContext gameContext) {
+    private final GameMode gameMode;
+    private final Button confirmButton;
+    private final Random random = new Random();
+
+    private int selectedIndex;
+
+    public CharacterSelectionState(GameContext gameContext, GameMode gameMode) {
         super(gameContext);
+        this.gameMode = gameMode;
 
         for (int i = 0; i < characters.length; i++) {
             int index = i;
@@ -39,25 +51,31 @@ public class CharacterSelectionState extends GameState{
             ));
         }
 
-        button = new Button(
+        confirmButton = new Button(
                 Viewport.WIDTH / 2f - 325,
                 850,
                 650,
                 80,
                 "START GAME WITH " + characters[selectedIndex].getDisplayName().toUpperCase(),
-                () -> {
-                    startGame(characters[selectedIndex]);
-                }
+                this::confirmSelection
         );
 
         select(0);
     }
 
     private void select(int index) {
-        selectedIndex = Math.floorMod(index, cards.size());
+        Character candidate = characters[index];
+
+        if (selections.contains(candidate)) {
+            return;
+        }
+
+        selectedIndex = index;
 
         for (int i = 0; i < cards.size(); i++) {
-            cards.get(i).setSelected(i == selectedIndex);
+            cards.get(i).setSelected(
+                    i == selectedIndex
+            );
         }
     }
 
@@ -71,7 +89,9 @@ public class CharacterSelectionState extends GameState{
 
     @Override
     public void update() {
-        button.setLabel("START GAME WITH " + characters[selectedIndex].getDisplayName().toUpperCase());
+        int playerNumber = selections.size() + 1;
+
+        confirmButton.setLabel("CONFIRM PLAYER " + playerNumber + ": " + characters[selectedIndex].getDisplayName().toUpperCase());
     }
 
     @Override
@@ -79,12 +99,16 @@ public class CharacterSelectionState extends GameState{
         app.background(Colors.BACKGROUND);
 
         Typography.h3(app);
-        app.text("SELECT YOUR CHARACTER", Viewport.WIDTH / 2f, 150);
+        app.text(getHeading(), Viewport.WIDTH / 2f, 150);
 
         for (HoverCard card : cards) {
             card.draw(app, gameContext.getViewport().screenToGameX(app.mouseX), gameContext.getViewport().screenToGameY(app.mouseY));
         }
-        button.draw(app, gameContext.getViewport().screenToGameX(app.mouseX), gameContext.getViewport().screenToGameY(app.mouseY));
+
+        confirmButton.draw(app, gameContext.getViewport().screenToGameX(app.mouseX), gameContext.getViewport().screenToGameY(app.mouseY));
+
+        Typography.hint(app);
+        app.text("USE 'A' AND 'D' TO SELECT AND 'SPACE' OR 'RETURN' TO CONFIRM", Viewport.WIDTH / 2f, 950);
     }
 
     @Override
@@ -95,21 +119,124 @@ public class CharacterSelectionState extends GameState{
         for (HoverCard card : cards) {
             card.mousePressed(gameMouseX, gameMouseY);
         }
-        button.mousePressed(gameMouseX, gameMouseY);
+        confirmButton.mousePressed(gameMouseX, gameMouseY);
     }
 
     @Override
-    public void keyPressed(char key) {
-        if (key == 'a' || key == 'A') {
-            select(Math.floorMod(selectedIndex - 1, characters.length));
-        } else if (key == 'd' || key == 'D') {
-            select(Math.floorMod(selectedIndex + 1, characters.length));
+    public void keyPressed(char key, int keyCode) {
+        boolean left = key == 'a' || key == 'A' || (key == PApplet.CODED && keyCode == PApplet.LEFT);
+        boolean right = key == 'd' || key == 'D' || (key == PApplet.CODED && keyCode == PApplet.RIGHT);
+
+        if (left) {
+            selectRelative(-1);
+        } else if (right) {
+            selectRelative(1);
         } else if (key == ' ' || key == '\n' || key == '\r') {
-            startGame(characters[selectedIndex]);
+            confirmSelection();
         }
     }
 
-    private void startGame(Character character) {
-        gameContext.getStateManager().setState(new GamePlayState(gameContext, character));
+    private String getHeading() {
+        if (gameMode == GameMode.SINGLE_PLAYER
+                || gameMode == GameMode.VS_AI) {
+            return "SELECT YOUR CHARACTER";
+        }
+
+        return "PLAYER "
+                + (selections.size() + 1)
+                + ": SELECT YOUR CHARACTER";
+    }
+
+    private void selectRelative(int direction) {
+        int candidateIndex = selectedIndex;
+
+        for (int attempt = 0;
+             attempt < characters.length;
+             attempt++) {
+            candidateIndex = Math.floorMod(
+                    candidateIndex + direction,
+                    characters.length
+            );
+
+            if (!selections.contains(
+                    characters[candidateIndex]
+            )) {
+                select(candidateIndex);
+                return;
+            }
+        }
+    }
+
+
+    private void confirmSelection() {
+        Character selectedCharacter =
+                characters[selectedIndex];
+
+        if (selections.contains(selectedCharacter)) {
+            return;
+        }
+
+        selections.add(selectedCharacter);
+
+        if (selections.size()
+                < gameMode.getHumanPlayerCount()) {
+            selectRelative(1);
+            return;
+        }
+
+        startGame();
+    }
+
+    private void startGame() {
+        List<PlayerConfig> playerConfigs = new ArrayList<>();
+
+        playerConfigs.add(new PlayerConfig(
+                selections.get(0),
+                1,
+                ControllerType.HUMAN_PLAYER_ONE
+        ));
+
+        if (gameMode == GameMode.LOCAL_MULTIPLAYER) {
+            playerConfigs.add(new PlayerConfig(
+                    selections.get(1),
+                    2,
+                    ControllerType.HUMAN_PLAYER_TWO
+            ));
+        }
+
+        if (gameMode == GameMode.VS_AI) {
+            playerConfigs.add(new PlayerConfig(
+                    selectAiCharacter(),
+                    2,
+                    ControllerType.AI
+            ));
+        }
+
+        GameConfig gameConfig = new GameConfig(
+                gameMode,
+                playerConfigs
+        );
+
+        gameContext.getStateManager().setState(
+                new GamePlayState(
+                        gameContext,
+                        gameConfig
+                )
+        );
+
+    }
+
+    private Character selectAiCharacter() {
+        List<Character> availableCharacters =
+                Arrays.stream(characters)
+                        .filter(character ->
+                                !selections.contains(character))
+                        .toList();
+
+        return availableCharacters.get(
+                random.nextInt(
+                        availableCharacters.size()
+                )
+        );
     }
 }

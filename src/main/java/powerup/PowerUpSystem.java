@@ -24,11 +24,7 @@ public class PowerUpSystem {
         );
     }
 
-    public void update(float deltaTime, GameMap map, Player player) {
-        Position playerPosition = map.worldToTile(
-                player.getX(),
-                player.getY()
-        );
+    public void update(float deltaTime, GameMap map, List<Player> players) {
 
         Iterator<PowerUp> iterator = powerUps.iterator();
 
@@ -42,11 +38,27 @@ public class PowerUpSystem {
                 continue;
             }
 
-            if (powerUp.getPosition().equals(playerPosition)) {
-                player.applyPowerUp(powerUp.getType());
+            Player collector = findCollector(powerUp, map, players);
+            if (collector != null) {
+                collector.applyPowerUp(powerUp.getType());
                 iterator.remove();
             }
         }
+    }
+
+    private Player findCollector(PowerUp powerUp, GameMap map, List<Player> players) {
+        for (Player player : players) {
+            if (!player.isAlive()) {
+                continue;
+            }
+
+            Position playerPosition = map.worldToTile(player.getX(), player.getY());
+            if (powerUp.getPosition().equals(playerPosition)) {
+                return player;
+            }
+        }
+
+        return null;
     }
 
     public List<PowerUp> getPowerUps() {

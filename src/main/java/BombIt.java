@@ -1,6 +1,9 @@
 import core.GameApplet;
 import core.GameContext;
+import player.Character;
+import player.Player;
 import processing.core.PApplet;
+import state.GameOverState;
 import state.MenuState;
 
 public class BombIt extends GameApplet {
@@ -40,12 +43,12 @@ public class BombIt extends GameApplet {
 
     @Override
     public void keyPressed() {
-        context.getStateManager().keyPressed(key);
+        context.getStateManager().keyPressed(key, keyCode);
     }
 
     @Override
     public void keyReleased() {
-        context.getStateManager().keyReleased(key);
+        context.getStateManager().keyReleased(key, keyCode);
     }
 
     @Override

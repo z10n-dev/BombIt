@@ -18,9 +18,9 @@ public abstract class GameState {
 
     public abstract void draw();
 
-    public void keyPressed(char key) {};
+    public void keyPressed(char key, int keyCode) {};
 
-    public void keyReleased(char key) {};
+    public void keyReleased(char key, int keyCode) {};
 
     public void mousePressed(int mouseX, int mouseY) {};
 }

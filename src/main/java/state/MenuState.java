@@ -19,12 +19,12 @@ public class MenuState extends GameState{
                 300,
                 80,
                 "PLAY",
-                this::selectCharacter
+                this::selectGameMode
         );
     }
 
-    private void selectCharacter() {
-        gameContext.getStateManager().setState(new CharacterSelectionState(gameContext));
+    private void selectGameMode() {
+        gameContext.getStateManager().setState(new GameModeSelectionState(gameContext));
     }
 
     @Override
@@ -75,9 +75,9 @@ public class MenuState extends GameState{
     }
 
     @Override
-    public void keyPressed(char key) {
+    public void keyPressed(char key, int keyCode) {
         if (key == ' ' || key == '\n' || key == '\r') {
-            selectCharacter();
+            selectGameMode();
         }
     }
 }

@@ -40,7 +40,7 @@ public class BombSystem {
         player.onBombPlaced();
     }
 
-    public void update(float deltaTime, GameMap map, Player player, PowerUpSystem  powerUpSystem) {
+    public void update(float deltaTime, GameMap map, List<Player> players, PowerUpSystem  powerUpSystem) {
         Queue<Bomb> pendingExplosions = new ArrayDeque<>();
 
         // Update Bombs
@@ -79,14 +79,22 @@ public class BombSystem {
 
         explosions.removeIf(Explosion::isFinished);
 
-        // Kill Players
-        Position playerPosition = map.worldToTile(
-                player.getX(),
-                player.getY());
+        damagePlayers(map, players);
+    }
 
-        for (Explosion explosion : explosions) {
-            if (explosion.contains(playerPosition)) {
-                player.kill();
+    private void damagePlayers(GameMap map, List<Player> players) {
+        for (Player player : players) {
+            if (!player.isAlive()) {
+                continue;
+            }
+
+            Position playerPosition = map.worldToTile(player.getX(), player.getY());
+
+            for (Explosion explosion : explosions) {
+                if (explosion.getPositions().contains(playerPosition)) {
+                    player.kill();
+                    break;
+                }
             }
         }
     }

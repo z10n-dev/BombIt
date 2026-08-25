@@ -6,40 +6,44 @@ import bomb.Explosion;
 import core.GameApplet;
 import core.GameContext;
 import core.Viewport;
+import game.*;
+import input.Controls;
+import input.InputState;
 import map.GameMap;
 import map.Position;
 import map.TileType;
-import player.Player;
+import player.*;
 import player.Character;
 import powerup.PowerUp;
 import powerup.PowerUpSystem;
 import processing.core.PImage;
 import style.Colors;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Random;
 
 public class GamePlayState extends GameState{
 
-
-    private final Player player;
+    private final GameConfig gameConfig;
     private final GameMap map;
 
     private final BombSystem bombSystem = new BombSystem();
-    private boolean bombKeyPressed;
-
     private final PowerUpSystem powerUpSystem = new PowerUpSystem();
+    private final InputState inputState = new InputState();
 
+    private final List<GamePlayer> gamePlayers = new ArrayList<>();
+
+    private final GameWorld gameWorld;
     private final PImage[] explosionFrames;
 
-    private boolean movingUp;
-    private boolean movingDown;
-    private boolean movingLeft;
-    private boolean movingRight;
-
     private int lastUpdateTime;
+    private boolean gameEnded;
 
-    public GamePlayState(GameContext gameContext, Character selectedCharacter) {
+    public GamePlayState(GameContext gameContext, GameConfig gameConfig) {
         super(gameContext);
+
+        this.gameConfig = gameConfig;
 
         map = GameMap.loadMap("data/map.txt");
 
@@ -49,13 +53,17 @@ public class GamePlayState extends GameState{
                 0.3f
         );
 
-        Position spawn = map.getSpawnPoint(1);
-        float spawnX = map.getOffsetX() + (spawn.column() + 0.5f) * map.getTileSize();
-        float spawnY = map.getOffsetY() + (spawn.row() + 0.5f) * map.getTileSize();
+        for (PlayerConfig playerConfig
+                : gameConfig.players()) {
+            createPlayer(playerConfig);
+        }
 
-        this.player = new Player(selectedCharacter,  spawnX, spawnY);
-
-        lastUpdateTime = app.millis();
+        gameWorld = new GameWorld(
+                map,
+                bombSystem,
+                powerUpSystem,
+                gamePlayers
+        );
 
         explosionFrames = new PImage[] {
                 gameContext.getAssetManager().loadImage("bigboom1.png"),
@@ -63,33 +71,41 @@ public class GamePlayState extends GameState{
                 gameContext.getAssetManager().loadImage("bigboom3.png"),
                 gameContext.getAssetManager().loadImage("bigboom4.png")
         };
+
+        lastUpdateTime = app.millis();
     }
 
     @Override
     public void update() {
+        if (gameEnded) {
+            return;
+        }
+
         int currentTime = app.millis();
 
         float deltaTime = Math.min((currentTime - lastUpdateTime) / 1000f, 0.05f);
 
         lastUpdateTime = currentTime;
 
-        float directionX = (movingRight ? 1 : 0) - (movingLeft ? 1 : 0);
-        float directionY = (movingDown ? 1 : 0) - (movingUp ? 1 : 0);
+        updatePlayers(deltaTime);
 
-        player.move(directionX, directionY, deltaTime, map);
+        List<Player> players = getPlayers();
 
         bombSystem.update(
                 deltaTime,
                 map,
-                player,
+                players,
                 powerUpSystem
         );
 
         powerUpSystem.update(
                 deltaTime,
                 map,
-                player
+                players
         );
+
+        inputState.finishFrame();
+        checkGameOver(players);
     }
 
     @Override
@@ -98,37 +114,128 @@ public class GamePlayState extends GameState{
         drawMap(app);
         drawPowerUps();
         drawBombs();
+        drawPlayers();
         drawExplosions();
-
-        PImage playerImage = gameContext.getAssetManager().loadImage(player.getCharacter().getImageFileName());
-
-        app.centeredImage(playerImage, player.getX(), player.getY(), 1);
     }
 
     @Override
-    public void keyPressed(char key) {
-        switch (java.lang.Character.toLowerCase(key)) {
-            case 'w' -> movingUp = true;
-            case 'a' -> movingLeft = true;
-            case 's' ->  movingDown = true;
-            case 'd' -> movingRight = true;
-            case ' ' -> {
-                if (!bombKeyPressed) {
-                    bombSystem.placeBomb(player, map);
-                    bombKeyPressed = true;
-                }
+    public void keyPressed(char key, int keyCode) {
+        inputState.keyPressed(keyCode);
+    }
+
+    @Override
+    public void keyReleased(char key, int keyCode) {
+        inputState.keyReleased(keyCode);
+    }
+
+    private void createPlayer(PlayerConfig playerConfig) {
+        Position spawn = map.getSpawnPoint(
+                playerConfig.spawnNumber()
+        );
+
+        float x = map.getOffsetX() + (spawn.column() + 0.5f) * map.getTileSize();
+        float y = map.getOffsetY() + (spawn.row() + 0.5f) * map.getTileSize();
+
+        Player player = new Player(
+                playerConfig.character(),
+                x,
+                y
+        );
+
+        PlayerController controller = createController(playerConfig.controllerType());
+
+        gamePlayers.add(new GamePlayer(player, controller));
+    }
+
+    private PlayerController createController(ControllerType controllerType) {
+        return switch (controllerType) {
+            case HUMAN_PLAYER_ONE -> new HumanController(inputState, Controls.PLAYER_ONE);
+            case HUMAN_PLAYER_TWO -> new HumanController(inputState, Controls.PLAYER_TWO);
+            case AI -> new AiController();
+        };
+    }
+
+    private void updatePlayers(float deltaTime) {
+        for (GamePlayer gamePlayer : gamePlayers) {
+            Player player = gamePlayer.player();
+
+            if (!player.isAlive()) {
+                continue;
+            }
+
+            PlayerAction action =
+                    gamePlayer.controller().update(
+                            player,
+                            gameWorld,
+                            deltaTime
+                    );
+
+            player.move(
+                    action.moveX(),
+                    action.moveY(),
+                    deltaTime,
+                    map
+            );
+
+            if (action.placeBomb()) {
+                bombSystem.placeBomb(player, map);
             }
         }
     }
 
-    @Override
-    public void keyReleased(char key) {
-        switch (java.lang.Character.toLowerCase(key)) {
-            case 'w' -> movingUp = false;
-            case 'a' -> movingLeft = false;
-            case 's' -> movingDown = false;
-            case 'd' -> movingRight = false;
-            case ' ' -> bombKeyPressed = false;
+    private List<Player> getPlayers() {
+        return gamePlayers.stream()
+                .map(GamePlayer::player)
+                .toList();
+    }
+
+    private void checkGameOver(List<Player> players) {
+        List<Player> alivePlayers = players.stream().filter(Player::isAlive).toList();
+
+        if (gameConfig.mode() == GameMode.SINGLE_PLAYER) {
+            if (alivePlayers.isEmpty()) {
+                finishGame(null, "GAME OVER!");
+            }
+
+            return;
+        }
+
+        if (alivePlayers.size() > 1) {
+            return;
+        }
+
+        if (alivePlayers.isEmpty()) {
+            finishGame(null, "DRAW!");
+        }
+
+        Player winner = alivePlayers.getFirst();
+        finishGame(winner, winner.getCharacter().getDisplayName() + " WINS!");
+    }
+
+    private void finishGame(Player winner, String message) {
+        gameEnded = true;
+
+        gameContext.getStateManager().setState(
+                new GameOverState(gameContext, winner, message)
+        );
+    }
+
+    private void drawPlayers() {
+        for (GamePlayer gamePlayer : gamePlayers) {
+            Player player = gamePlayer.player();
+
+            if (!player.isAlive()) {
+                continue;
+            }
+
+            PImage image = gameContext.getAssetManager().loadImage(player.getCharacter().getImageFileName());
+
+            app.centeredImage(
+                    image,
+                    player.getX(),
+                    player.getY(),
+                    1f
+            );
         }
     }
 
