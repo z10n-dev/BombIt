@@ -3,20 +3,21 @@ package state;
 import bomb.Bomb;
 import bomb.BombSystem;
 import bomb.Explosion;
-import core.GameApplet;
 import core.GameContext;
-import core.Viewport;
 import game.*;
+import highscore.HighScoreSaveResult;
 import input.Controls;
 import input.InputState;
 import map.GameMap;
 import map.Position;
 import map.TileType;
 import player.*;
-import player.Character;
 import powerup.PowerUp;
 import powerup.PowerUpSystem;
+import processing.core.PConstants;
+import processing.core.PGraphics;
 import processing.core.PImage;
+import processing.sound.SoundFile;
 import style.Colors;
 
 import java.util.ArrayList;
@@ -24,6 +25,9 @@ import java.util.List;
 import java.util.Random;
 
 public class GamePlayState extends GameState{
+
+    private static final float BREAKABLE_RATIO = 0.8f;
+    private static final float POWERUP_RATIO = 0.3f;
 
     private final GameConfig gameConfig;
     private final GameMap map;
@@ -36,9 +40,21 @@ public class GamePlayState extends GameState{
 
     private final GameWorld gameWorld;
     private final PImage[] explosionFrames;
+    private final SoundFile explosionSound;
 
     private int lastUpdateTime;
+    private final long matchStartNanos;
     private boolean gameEnded;
+
+    private final PImage grassImage;
+    private final PImage unbreakableWallImage;
+    private final PImage breakableWallImage;
+    private final PImage rangePowerUpWallImage;
+    private final PImage speedPowerUpWallImage;
+    private final PImage burstPowerUpWallImage;
+
+    PGraphics mapLayer;
+    int renderedMapRevision = -1;
 
     public GamePlayState(GameContext gameContext, GameConfig gameConfig) {
         super(gameContext);
@@ -49,8 +65,8 @@ public class GamePlayState extends GameState{
 
         map.generateRandomContent(
                 new Random(),
-                0.8f,
-                0.3f
+                BREAKABLE_RATIO,
+                POWERUP_RATIO
         );
 
         for (PlayerConfig playerConfig
@@ -72,7 +88,18 @@ public class GamePlayState extends GameState{
                 gameContext.getAssetManager().loadImage("bigboom4.png")
         };
 
+        explosionSound = gameContext.getAssetManager().loadSound("bomb_explosion.wav");
+        explosionSound.amp(1f);
+
+        grassImage = gameContext.getAssetManager().loadImage("grass.png");
+        unbreakableWallImage = gameContext.getAssetManager().loadImage("unbreakable_wall.png");
+        breakableWallImage = gameContext.getAssetManager().loadImage("breakable_wall.png");
+        rangePowerUpWallImage = gameContext.getAssetManager().loadImage("range_power_up_wall.png");
+        speedPowerUpWallImage = gameContext.getAssetManager().loadImage("speed_power_up_wall.png");
+        burstPowerUpWallImage = gameContext.getAssetManager().loadImage("burst_power_up_wall.png");
+
         lastUpdateTime = app.millis();
+        matchStartNanos = System.nanoTime();
     }
 
     @Override
@@ -91,12 +118,16 @@ public class GamePlayState extends GameState{
 
         List<Player> players = getPlayers();
 
-        bombSystem.update(
+        int startedExplosionCount = bombSystem.update(
                 deltaTime,
                 map,
                 players,
                 powerUpSystem
         );
+
+        if (startedExplosionCount > 0) {
+            explosionSound.play();
+        }
 
         powerUpSystem.update(
                 deltaTime,
@@ -111,7 +142,7 @@ public class GamePlayState extends GameState{
     @Override
     public void draw() {
         app.background(Colors.BACKGROUND);
-        drawMap(app);
+        drawMap();
         drawPowerUps();
         drawBombs();
         drawPlayers();
@@ -144,7 +175,7 @@ public class GamePlayState extends GameState{
 
         PlayerController controller = createController(playerConfig.controllerType());
 
-        gamePlayers.add(new GamePlayer(player, controller));
+        gamePlayers.add(new GamePlayer(player, controller, playerConfig));
     }
 
     private PlayerController createController(ControllerType controllerType) {
@@ -189,12 +220,24 @@ public class GamePlayState extends GameState{
                 .toList();
     }
 
-    private void checkGameOver(List<Player> players) {
-        List<Player> alivePlayers = players.stream().filter(Player::isAlive).toList();
+    private void checkGameOver(
+            List<Player> players
+    ) {
+        List<Player> alivePlayers =
+                players.stream()
+                        .filter(Player::isAlive)
+                        .toList();
 
-        if (gameConfig.mode() == GameMode.SINGLE_PLAYER) {
+        if (gameConfig.mode()
+                == GameMode.SINGLE_PLAYER) {
+
             if (alivePlayers.isEmpty()) {
-                finishGame(null, "GAME OVER!");
+                finishGame(
+                        GameOutcome.LOSS,
+                        null,
+                        false,
+                        "GAME OVER!"
+                );
             }
 
             return;
@@ -205,18 +248,109 @@ public class GamePlayState extends GameState{
         }
 
         if (alivePlayers.isEmpty()) {
-            finishGame(null, "DRAW!");
+            finishGame(
+                    GameOutcome.DRAW,
+                    null,
+                    false,
+                    "DRAW!"
+            );
+
+            return;
         }
 
         Player winner = alivePlayers.getFirst();
-        finishGame(winner, winner.getCharacter().getDisplayName() + " WINS!");
+
+        Player defeatedPlayer =
+                findDefeatedPlayer(
+                        players,
+                        winner
+                );
+
+        Player killer =
+                bombSystem.getKiller(
+                        defeatedPlayer
+                );
+
+        boolean winnerCausedElimination =
+                killer == winner;
+
+        PlayerConfig winnerConfig =
+                findPlayerConfig(winner);
+
+        finishGame(
+                GameOutcome.WIN,
+                winnerConfig,
+                winnerCausedElimination,
+                winnerConfig.playerName()
+                        + " WINS!"
+        );
     }
 
-    private void finishGame(Player winner, String message) {
+    private Player findDefeatedPlayer(
+            List<Player> players,
+            Player winner
+    ) {
+        for (Player player : players) {
+            if (player != winner
+                    && !player.isAlive()) {
+                return player;
+            }
+        }
+
+        throw new IllegalStateException(
+                "No defeated player found"
+        );
+    }
+
+    private PlayerConfig findPlayerConfig(Player player) {
+        for (GamePlayer gamePlayer : gamePlayers) {
+            if (gamePlayer.player() == player) {
+                return gamePlayer.config();
+            }
+        }
+
+        throw new IllegalStateException(
+                "Winner has no player configuration"
+        );
+    }
+
+    private void finishGame(
+            GameOutcome outcome,
+            PlayerConfig winner,
+            boolean winnerCausedElimination,
+            String message
+    ) {
+        if (gameEnded) {
+            return;
+        }
+
         gameEnded = true;
 
+        long durationMillis =
+                (System.nanoTime()
+                        - matchStartNanos)
+                        / 1_000_000L;
+
+        GameResult result =
+                new GameResult(
+                        gameConfig.mode(),
+                        outcome,
+                        winner,
+                        winnerCausedElimination,
+                        durationMillis,
+                        message
+                );
+
+        HighScoreSaveResult saveResult =
+                gameContext.getHighScoreService()
+                        .record(result);
+
         gameContext.getStateManager().setState(
-                new GameOverState(gameContext, winner, message)
+                new GameOverState(
+                        gameContext,
+                        result,
+                        saveResult
+                )
         );
     }
 
@@ -282,28 +416,87 @@ public class GamePlayState extends GameState{
         }
     }
 
-    private void drawMap(GameApplet app) {
+    private void drawMap() {
+
+        initializeMapLayer();
+
+        if (renderedMapRevision != map.getRevision()) {
+            rebuildMapLayer();
+        }
+
+        app.image(mapLayer, map.getOffsetX(), map.getOffsetY());
+    }
+
+    private void initializeMapLayer() {
+        if (mapLayer != null) {
+            return;
+        }
+
+        int mapWidth = Math.round(
+                map.getWidth() *  map.getTileSize()
+        );
+
+        int mapHeight = Math.round(
+                map.getHeight() * map.getTileSize()
+        );
+
+        mapLayer = app.createGraphics(
+                mapWidth,
+                mapHeight,
+                PConstants.P2D
+        );
+    }
+
+    private void rebuildMapLayer() {
+        float tileSize = map.getTileSize();
+
+        mapLayer.beginDraw();
+        mapLayer.clear();
 
         for (int row = 0; row < map.getHeight(); row ++) {
-            for (int col = 0; col < map.getWidth(); col ++) {
-                TileType tile = map.getTile(col, row);
-                PImage tileSprite = switch (tile) {
-                    case EMPTY -> gameContext.getAssetManager().loadImage("grass.png");
-                    case UNBREAKABLE_WALL -> gameContext.getAssetManager().loadImage("unbreakable_wall.png");
-                    case BREAKABLE_WALL -> gameContext.getAssetManager().loadImage("breakable_wall.png");
-                    case RANGE_POWER_UP_WALL -> gameContext.getAssetManager().loadImage("range_power_up_wall.png");
-                    case SPEED_POWER_UP_WALL -> gameContext.getAssetManager().loadImage("speed_power_up_wall.png");
-                    case BURST_POWER_UP_WALL -> gameContext.getAssetManager().loadImage("burst_power_up_wall.png");
-                };
-                app.image(gameContext.getAssetManager().loadImage("grass.png"), map.getOffsetX() + col * map.getTileSize(),  map.getOffsetY() + row * map.getTileSize(), map.getTileSize(), map.getTileSize() );
-                app.image(
-                        tileSprite,
-                        map.getOffsetX() + col * map.getTileSize(),
-                        map.getOffsetY() + row * map.getTileSize(),
-                        map.getTileSize(),
-                        map.getTileSize()
+            for (int column = 0; column < map.getWidth(); column ++) {
+                TileType tile = map.getTile(
+                        column,
+                        row
                 );
+
+                float x = column * tileSize;
+                float y = row * tileSize;
+
+                mapLayer.image(
+                        grassImage,
+                        x,
+                        y,
+                        tileSize,
+                        tileSize
+                );
+
+                PImage wallImage = getWallImage(tile);
+
+                if (wallImage != null) {
+                    mapLayer.image(
+                            wallImage,
+                            x,
+                            y,
+                            tileSize,
+                            tileSize
+                    );
+                }
             }
         }
+
+        mapLayer.endDraw();
+        renderedMapRevision = map.getRevision();
+    }
+
+    private PImage getWallImage(TileType tile) {
+        return switch (tile) {
+            case EMPTY -> null;
+            case UNBREAKABLE_WALL -> unbreakableWallImage;
+            case BREAKABLE_WALL -> breakableWallImage;
+            case RANGE_POWER_UP_WALL -> rangePowerUpWallImage;
+            case SPEED_POWER_UP_WALL -> speedPowerUpWallImage;
+            case BURST_POWER_UP_WALL -> burstPowerUpWallImage;
+        };
     }
 }

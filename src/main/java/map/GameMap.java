@@ -19,10 +19,12 @@ public class GameMap {
 
     private final TileType[][] tiles;
     private final Map<Integer, Position> spawnPoints;
+    private int revision;
 
     public GameMap(TileType[][] tiles, Map<Integer, Position> spawnPoints) {
         this.tiles = tiles;
         this.spawnPoints = spawnPoints;
+        revision = 0;
     }
 
     public static GameMap loadMap(String mapPath) {
@@ -70,9 +72,9 @@ public class GameMap {
     }
 
     public void generateRandomContent(Random random, float breakableRatio, float powerupRatio) {
-        for (int row = 0; row < getHeight(); row++){
-            for (int column = 0; column < getWidth(); column++){
-                if (tiles[row][column] != TileType.EMPTY){
+        for (int row = 0; row < getHeight(); row++) {
+            for (int column = 0; column < getWidth(); column++) {
+                if (tiles[row][column] != TileType.EMPTY) {
                     continue;
                 }
 
@@ -138,7 +140,7 @@ public class GameMap {
 
     public boolean isWalkable(int column, int row) {
         if (column < 0 || column >= getWidth()
-            || row < 0 || row >= getHeight()) {
+                || row < 0 || row >= getHeight()) {
             return false;
         }
 
@@ -165,12 +167,16 @@ public class GameMap {
 
         tiles[row][column] = TileType.EMPTY;
 
-        return switch (tileType) {
-            case SPEED_POWER_UP_WALL -> Optional.of(PowerUpType.SPEED);
-            case BURST_POWER_UP_WALL -> Optional.of(PowerUpType.BURST);
-            case RANGE_POWER_UP_WALL -> Optional.of(PowerUpType.RANGE);
-            default -> Optional.empty();
-        };
+        try {
+            return switch (tileType) {
+                case SPEED_POWER_UP_WALL -> Optional.of(PowerUpType.SPEED);
+                case BURST_POWER_UP_WALL -> Optional.of(PowerUpType.BURST);
+                case RANGE_POWER_UP_WALL -> Optional.of(PowerUpType.RANGE);
+                default -> Optional.empty();
+            };
+        } finally {
+            revision++;
+        }
     }
 
     public Position worldToTile(float x, float y) {
@@ -197,5 +203,9 @@ public class GameMap {
 
     public float getOffsetY() {
         return (Viewport.HEIGHT - getHeight() * TILE_SIZE) / 2;
+    }
+
+    public int getRevision() {
+        return revision;
     }
 }

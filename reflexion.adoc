@@ -1,0 +1,57 @@
+= BombIt - Projektdokumentation und Reflexion
+
+== Ziel
+
+Mein Ziel war es, mit Processing und Java ein eigenes Spiel nach dem Vorbild von Bomberman zu entwickeln. Die wichtigsten Spielmechaniken sollten Bewegung, platzierbare Bomben, Explosionen, zerstörbare Wände und Power-ups umfassen. Neben einem Trainingsmodus wollte ich einen lokalen Mehrspielermodus und einen Modus gegen einen computergesteuerten Gegner anbieten.
+
+Ein weiteres Ziel war eine klare Struktur des Codes. Menüs, Charakterauswahl, Spiel und Endscreen sollten nicht direkt miteinander vermischt sein. Das Spiel sollte ausserdem auf unterschiedlichen Bildschirmgrössen funktionieren und Highscores lokal speichern können.
+
+== Vorgehen
+
+Zu Beginn habe ich ein State-System erstellt. Jeder Bildschirm des Spiels ist ein eigener State, beispielsweise das Hauptmenü, die Modusauswahl, die Charakterauswahl, das eigentliche Spiel und der Endscreen. Der `StateManager` wechselt zwischen diesen Zuständen. Diese Struktur hat mir geholfen, neue Screens hinzuzufügen, ohne die gesamte Spiellogik in einer einzigen Klasse unterbringen zu müssen.
+
+Danach habe ich die Karte implementiert. Das feste Grundlayout mit unzerstörbaren Wänden und Spawnpunkten wird aus einer Textdatei geladen. Zerstörbare Wände und darin versteckte Power-ups werden bei jedem Spiel zufällig verteilt. Anschliessend folgten die Spielerbewegung, Kollisionen und die Steuerung für zwei menschliche Spieler.
+
+Als nächsten Schritt habe ich das Bombensystem umgesetzt. Dieses verwaltet aktive Bomben, deren Timer und die daraus entstehenden Explosionen. Eine Explosion breitet sich kachelweise aus, wird von festen Wänden gestoppt und zerstört zerstörbare Wände. Dabei können die Power-ups Geschwindigkeit, Explosionsreichweite und Anzahl gleichzeitig platzierbarer Bomben freigelegt werden. Später kamen Kettenreaktionen und die Zuordnung einer Explosion zum Besitzer der ausgelösten Bombe dazu.
+
+Für den Gegner im Modus `VS AI` habe ich zuerst eine einfache Wegsuche implementiert. Danach wurde die Logik schrittweise erweitert. Die KI bewertet Ziele, sucht mit Breadth-First Search einen Weg, erkennt gefährliche Felder und plant vor dem Platzieren einer Bombe einen Fluchtweg. Dadurch entscheidet sie nicht nur anhand der kürzesten Distanz, sondern muss auch Explosionen und die eigene Sicherheit beachten.
+
+Zum Schluss habe ich die Benutzeroberfläche und das Highscore-System erweitert. Vor einem wertbaren Spiel werden Spielernamen erfasst. Bei einem gültigen Sieg wird die benötigte Zeit gemessen und die beste Zeit pro Name in einer lokalen JSON-Datei gespeichert. Die Highscore-Liste kann über das Hauptmenü und den Endscreen geöffnet werden. Selbstmorde, Unentschieden, Siege der KI und der Trainingsmodus werden nicht gewertet. Ausserdem habe ich einen Explosionssound hinzugefügt und wiederholt an Darstellung und Performance gearbeitet.
+
+== Schwierigkeiten
+
+Die grösste fachliche Schwierigkeit war die KI. Einen kürzesten Weg zum Spieler zu finden reichte nicht aus. Die KI lief anfangs in Explosionen, platzierte Bomben ohne Fluchtmöglichkeit oder wechselte ihr Ziel zu oft. Besonders schwierig war, nicht nur momentan gefährliche Felder zu berücksichtigen, sondern auch Felder, die beim Explodieren einer bereits liegenden oder neu geplanten Bombe gefährlich werden.
+
+Eine weitere Schwierigkeit waren die Regeln am Spielende. Für einen korrekten Highscore musste festgestellt werden, wer einen Gegner tatsächlich besiegt hat. Das ist bei Kettenreaktionen nicht automatisch die Person, welche die erste Bombe gelegt hat. Auch Selbstmorde und gleichzeitige Eliminierungen mussten von einem normalen Sieg unterschieden werden.
+
+Technische Probleme gab es beim Starten der Processing-Anwendung mit dem `P2D`-Renderer unter NixOS. Processing 4.5.2 und eine unpassende JOGL-Version führten zu einem Fehler beim Erstellen des OpenGL-Kontexts. Zudem war das Zeichnen der Karte anfangs ineffizient, weil unveränderte Grafiken zu oft neu verarbeitet wurden.
+
+Auch die vielen State-Übergänge waren fehleranfällig. Beim Einbau der Namenseingabe startete beispielsweise der Single-Player-Modus vorübergehend nicht mehr, weil die Charakterauswahl einen Spielernamen erwartete, aber eine leere Liste erhielt.
+
+== Lösungsweg
+
+Die KI-Probleme habe ich in kleinere Teilprobleme zerlegt. Die Wegsuche, Gefahrenerkennung, Zielauswahl und Bombenplanung wurden getrennt behandelt. Vor dem Legen einer Bombe simuliert die KI deren zukünftigen Explosionsbereich und sucht nach einer erreichbaren sicheren Kachel. Ein einmal gewählter Bombenplan bleibt bestehen, bis er ungültig wird oder ausgeführt wurde. Dadurch handelt die KI stabiler und verwirft ihr Ziel nicht mehr bei jeder kurzen Neuberechnung.
+
+Für das Spielende speichert jede Explosion ihren Bombenbesitzer. Das Bombensystem kann damit den Verursacher einer Eliminierung bestimmen. Das Highscore-System erhält ein strukturiertes Spielergebnis und entscheidet zentral, ob dieses Ergebnis gewertet werden darf. Die Daten werden zuerst in eine temporäre JSON-Datei geschrieben und danach verschoben, damit ein unterbrochener Schreibvorgang die bestehende Highscore-Datei möglichst nicht beschädigt.
+
+Das Grafikproblem habe ich durch kompatible JOGL- und GlueGen-Versionen gelöst. Unter NixOS stellt eine `flake.nix` die benötigten Java-, OpenGL- und Audio-Abhängigkeiten bereit. Bilder, Fonts und Sounds werden über den `AssetManager` nur einmal geladen und danach wiederverwendet. Die statischen Teile der Karte werden in einem `PGraphics`-Objekt zwischengespeichert und nur nach einer Kartenveränderung neu gezeichnet.
+
+Fehler in den State-Übergängen habe ich durch das Nachverfolgen der übergebenen Daten und durch Validierungen in den Konstruktoren gefunden. Beim Single Player wird nun ein Standardname übergeben, während die Namenseingabe nur für wertbare Spielmodi benötigt wird.
+
+== Endresultat
+
+Entstanden ist ein spielbarer Bomberman-Klon mit drei Spielmodi: Training, lokaler Mehrspieler und ein Spiel gegen eine KI. Die Spieler können Charaktere auswählen, Bomben platzieren, Wände zerstören und drei Arten von Power-ups sammeln. Es gibt einen Startscreen mit integrierter Kurzanleitung, eine Modus- und Charakterauswahl, einen Endscreen mit Replay-Funktion sowie eine lokal persistierte Highscore-Liste. Maus und Tastatur können für die Menüs verwendet werden.
+
+Nicht alle ursprünglichen Anforderungen sind gleich weit umgesetzt. Es gibt bisher keine drei eigenständigen Level. Das Grundlayout bleibt gleich, während zerstörbare Wände und Power-ups pro Runde zufällig verteilt werden. Die Anleitung befindet sich direkt auf dem Startscreen und nicht in einem eigenen Tutorial-State. Diese Punkte wären die nächsten sinnvollen Erweiterungen.
+
+== Lernerfolge und Reflexion
+
+In diesem Projekt habe ich gelernt, dass die Struktur bei einem Spiel schnell wichtiger wird als am Anfang erwartet. Das State-Pattern hat verhindert, dass Menü-, Eingabe- und Spiellogik vollständig vermischt werden. Records und Enums waren hilfreich, um Spielkonfigurationen, Resultate und feste Zustände klar abzubilden. Ich habe ausserdem besser verstanden, wie ein kachelbasiertes Spiel Kollisionen, Explosionen und Wegsuche modellieren kann.
+
+Bei der KI habe ich gelernt, dass eine funktionierende Suche noch keine glaubwürdige Spiellogik ergibt. Die Qualität entstand erst durch zusätzliche Regeln für Gefahr, Flucht und stabile Entscheidungen. Das schrittweise Testen kleiner Szenarien war dabei hilfreicher als der Versuch, sofort eine vollständige Strategie zu schreiben.
+
+Auch bei Performance und Abhängigkeiten habe ich viel gelernt. Ressourcen sollten nicht in jedem Frame neu geladen werden, und statische Inhalte müssen nicht immer neu gezeichnet werden. Der JOGL-Fehler zeigte mir zudem, dass ein Problem nicht zwingend im eigenen Spielcode liegen muss, sondern auch durch inkompatible Bibliotheksversionen entstehen kann.
+
+KI-Werkzeuge habe ich als Unterstützung für Fehlersuche, Varianten und Code-Reviews verwendet. Vorschläge konnte ich nicht einfach ungeprüft übernehmen: Mehrfach mussten sie an die vorhandene Architektur angepasst oder wegen Seiteneffekten korrigiert werden. Entscheidend war deshalb, die betroffenen Abläufe selbst nachzuvollziehen und den Code nach jeder Änderung zu kompilieren und zu testen.
+
+Rückblickend war der Umfang mit Spielmechanik, KI, mehreren Modi, Highscores und technischer Einrichtung gross. Ich würde bei einem weiteren Projekt früher automatisierte Tests für Spiellogik und State-Übergänge schreiben und die Pflichtanforderungen wie Level und Tutorial früher priorisieren. Trotzdem bin ich mit dem Resultat zufrieden, weil aus dem Startercode ein eigenständiges, spielbares Projekt entstanden ist und ich die zentralen Teile des Codes erklären und weiterentwickeln kann.

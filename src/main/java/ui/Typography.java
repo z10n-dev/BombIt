@@ -1,48 +1,59 @@
 package ui;
 
+import core.GameApplet;
 import processing.core.PApplet;
 import processing.core.PFont;
 import style.Colors;
 
 public final class Typography {
 
-    public static void h1(PApplet app) {
-        PFont boldFont = app.createFont("SansSerif.bold", 128);
+    private final GameApplet app;
 
+    private PFont h1Font;
+    private PFont h2Font;
+    private PFont h3Font;
+    private PFont hintFont;
+    private PFont cardTitleFont;
+
+    public Typography(GameApplet app) {
+        this.app = app;
+    }
+
+    public void h1() {
         app.textAlign(PApplet.CENTER, PApplet.CENTER);
-        app.textFont(boldFont);
+        app.textFont(h1Font);
         app.fill(Colors.PRIMARY);
     }
 
-    public static void h2(PApplet app) {
-        PFont boldFont = app.createFont("SansSerif.bold", 48);
-
+    public void h2() {
         app.textAlign(PApplet.CENTER, PApplet.CENTER);
-        app.textFont(boldFont);
+        app.textFont(h2Font);
         app.fill(Colors.SECONDARY);
     }
 
-    public static void h3(PApplet app) {
-        PFont boldFont = app.createFont("SansSerif.bold", 92);
-
+    public void h3() {
         app.textAlign(PApplet.CENTER, PApplet.CENTER);
-        app.textFont(boldFont);
+        app.textFont(h3Font);
         app.fill(Colors.PRIMARY);
     }
 
-    public static void hint(PApplet app) {
-        PFont font = app.createFont("SansSerif", 24);
-
+    public void hint() {
         app.textAlign(PApplet.CENTER, PApplet.CENTER);
-        app.textFont(font);
+        app.textFont(hintFont);
         app.fill(Colors.SECONDARY);
     }
 
-    public static void cardTitle(PApplet app) {
-        PFont boldFont = app.createFont("SansSerif.bold", 28);
-
+    public void cardTitle() {
         app.textAlign(PApplet.CENTER, PApplet.CENTER);
-        app.textFont(boldFont);
+        app.textFont(cardTitleFont);
         app.fill(Colors.PRIMARY);
+    }
+
+    public void setup() {
+        h1Font = app.createFont("SansSerif.bold", 128);
+        h2Font = app.createFont("SansSerif.bold", 48);
+        h3Font = app.createFont("SansSerif.bold", 92);
+        hintFont = app.createFont("SansSerif", 24);
+        cardTitleFont = app.createFont("SansSerif.bold", 28);
     }
 }

@@ -6,237 +6,216 @@ import game.ControllerType;
 import game.GameConfig;
 import game.GameMode;
 import game.PlayerConfig;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Random;
 import player.Character;
 import processing.core.PApplet;
 import style.Colors;
 import ui.Button;
 import ui.HoverCard;
-import ui.Typography;
-
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Random;
 
 public class CharacterSelectionState extends GameState {
 
-    private final Character[] characters = Character.values();
-    private final List<HoverCard> cards = new ArrayList<>();
-    private final List<Character> selections = new ArrayList<>();
+  private final Character[] characters = Character.values();
+  private final List<HoverCard> cards = new ArrayList<>();
+  private final List<Character> selections = new ArrayList<>();
+  private final List<String> playerNames;
 
-    private final GameMode gameMode;
-    private final Button confirmButton;
-    private final Random random = new Random();
+  private final GameMode gameMode;
+  private final Button confirmButton;
+  private final Random random = new Random();
 
-    private int selectedIndex;
+  private int selectedIndex;
 
-    public CharacterSelectionState(GameContext gameContext, GameMode gameMode) {
-        super(gameContext);
-        this.gameMode = gameMode;
+  public CharacterSelectionState(
+      GameContext gameContext, GameMode gameMode, List<String> playerNames) {
+    super(gameContext);
+    this.gameMode = gameMode;
+    this.playerNames = List.copyOf(playerNames);
 
-        for (int i = 0; i < characters.length; i++) {
-            int index = i;
-            Character character = characters[i];
-
-            float x = (i + 1) * (Viewport.WIDTH / (characters.length + 1f));
-            float y = Viewport.HEIGHT / 2f;
-
-            cards.add(new HoverCard(
-                    x - 100,
-                    y - 150,
-                    200,
-                    300,
-                    () -> drawCharacter(character, x, y),
-                    () -> select(index)
-            ));
-        }
-
-        confirmButton = new Button(
-                Viewport.WIDTH / 2f - 325,
-                850,
-                650,
-                80,
-                "START GAME WITH " + characters[selectedIndex].getDisplayName().toUpperCase(),
-                this::confirmSelection
-        );
-
-        select(0);
+    if (this.playerNames.size() != gameMode.getHumanPlayerCount()) {
+      throw new IllegalArgumentException(
+          "Player names count does not match game mode requirements.");
     }
 
-    private void select(int index) {
-        Character candidate = characters[index];
+    for (int i = 0; i < characters.length; i++) {
+      int index = i;
+      Character character = characters[i];
 
-        if (selections.contains(candidate)) {
-            return;
-        }
+      float x = (i + 1) * (Viewport.WIDTH / (characters.length + 1f));
+      float y = Viewport.HEIGHT / 2f;
 
-        selectedIndex = index;
-
-        for (int i = 0; i < cards.size(); i++) {
-            cards.get(i).setSelected(
-                    i == selectedIndex
-            );
-        }
+      cards.add(
+          new HoverCard(
+              x - 100,
+              y - 150,
+              200,
+              300,
+              () -> drawCharacter(character, x, y),
+              () -> select(index)));
     }
 
-    private void drawCharacter(Character character, float x, float y) {
-        app.pushStyle();
-        app.centeredImage(gameContext.getAssetManager().loadImage(character.getImageFileName()), x, y, 2f);
-        Typography.cardTitle(app);
-        app.text(character.getDisplayName(), x, y + 120);
-        app.popStyle();
+    confirmButton =
+        new Button(
+            Viewport.WIDTH / 2f - 325,
+            850,
+            650,
+            80,
+            "START GAME WITH " + characters[selectedIndex].getDisplayName().toUpperCase(),
+            this::confirmSelection);
+
+    select(0);
+  }
+
+  private void select(int index) {
+    Character candidate = characters[index];
+
+    if (selections.contains(candidate)) {
+      return;
     }
 
-    @Override
-    public void update() {
-        int playerNumber = selections.size() + 1;
+    selectedIndex = index;
 
-        confirmButton.setLabel("CONFIRM PLAYER " + playerNumber + ": " + characters[selectedIndex].getDisplayName().toUpperCase());
+    for (int i = 0; i < cards.size(); i++) {
+      cards.get(i).setSelected(i == selectedIndex);
+    }
+  }
+
+  private void drawCharacter(Character character, float x, float y) {
+    app.pushStyle();
+    app.centeredImage(
+        gameContext.getAssetManager().loadImage(character.getImageFileName()), x, y, 2f);
+    gameContext.getTypography().cardTitle();
+    app.text(character.getDisplayName(), x, y + 120);
+    app.popStyle();
+  }
+
+  @Override
+  public void update() {
+    int playerNumber = selections.size() + 1;
+
+    confirmButton.setLabel(
+        "CONFIRM PLAYER "
+            + playerNumber
+            + ": "
+            + characters[selectedIndex].getDisplayName().toUpperCase());
+  }
+
+  @Override
+  public void draw() {
+    app.background(Colors.BACKGROUND);
+
+    gameContext.getTypography().h3();
+    app.text(getHeading(), Viewport.WIDTH / 2f, 150);
+
+    for (HoverCard card : cards) {
+      card.draw(
+          app,
+          gameContext.getViewport().screenToGameX(app.mouseX),
+          gameContext.getViewport().screenToGameY(app.mouseY));
     }
 
-    @Override
-    public void draw() {
-        app.background(Colors.BACKGROUND);
+    confirmButton.draw(
+        app,
+        gameContext.getViewport().screenToGameX(app.mouseX),
+        gameContext.getViewport().screenToGameY(app.mouseY));
 
-        Typography.h3(app);
-        app.text(getHeading(), Viewport.WIDTH / 2f, 150);
+    gameContext.getTypography().hint();
+    app.text(
+        "USE 'A' AND 'D' TO SELECT AND 'SPACE' OR 'RETURN' TO CONFIRM", Viewport.WIDTH / 2f, 950);
+  }
 
-        for (HoverCard card : cards) {
-            card.draw(app, gameContext.getViewport().screenToGameX(app.mouseX), gameContext.getViewport().screenToGameY(app.mouseY));
-        }
+  @Override
+  public void mousePressed(int mouseX, int mouseY) {
+    float gameMouseX = gameContext.getViewport().screenToGameX(mouseX);
+    float gameMouseY = gameContext.getViewport().screenToGameY(mouseY);
 
-        confirmButton.draw(app, gameContext.getViewport().screenToGameX(app.mouseX), gameContext.getViewport().screenToGameY(app.mouseY));
+    for (HoverCard card : cards) {
+      card.mousePressed(gameMouseX, gameMouseY);
+    }
+    confirmButton.mousePressed(gameMouseX, gameMouseY);
+  }
 
-        Typography.hint(app);
-        app.text("USE 'A' AND 'D' TO SELECT AND 'SPACE' OR 'RETURN' TO CONFIRM", Viewport.WIDTH / 2f, 950);
+  @Override
+  public void keyPressed(char key, int keyCode) {
+    boolean left = key == 'a' || key == 'A' || (key == PApplet.CODED && keyCode == PApplet.LEFT);
+    boolean right = key == 'd' || key == 'D' || (key == PApplet.CODED && keyCode == PApplet.RIGHT);
+
+    if (left) {
+      selectRelative(-1);
+    } else if (right) {
+      selectRelative(1);
+    } else if (key == ' ' || key == '\n' || key == '\r') {
+      confirmSelection();
+    }
+  }
+
+  private String getHeading() {
+    if (gameMode == GameMode.SINGLE_PLAYER || gameMode == GameMode.VS_AI) {
+      return "SELECT YOUR CHARACTER";
     }
 
-    @Override
-    public void mousePressed(int mouseX, int mouseY) {
-        float gameMouseX = gameContext.getViewport().screenToGameX(mouseX);
-        float gameMouseY = gameContext.getViewport().screenToGameY(mouseY);
+    return "PLAYER " + (selections.size() + 1) + ": SELECT YOUR CHARACTER";
+  }
 
-        for (HoverCard card : cards) {
-            card.mousePressed(gameMouseX, gameMouseY);
-        }
-        confirmButton.mousePressed(gameMouseX, gameMouseY);
+  private void selectRelative(int direction) {
+    int candidateIndex = selectedIndex;
+
+    for (int attempt = 0; attempt < characters.length; attempt++) {
+      candidateIndex = Math.floorMod(candidateIndex + direction, characters.length);
+
+      if (!selections.contains(characters[candidateIndex])) {
+        select(candidateIndex);
+        return;
+      }
+    }
+  }
+
+  private void confirmSelection() {
+    Character selectedCharacter = characters[selectedIndex];
+
+    if (selections.contains(selectedCharacter)) {
+      return;
     }
 
-    @Override
-    public void keyPressed(char key, int keyCode) {
-        boolean left = key == 'a' || key == 'A' || (key == PApplet.CODED && keyCode == PApplet.LEFT);
-        boolean right = key == 'd' || key == 'D' || (key == PApplet.CODED && keyCode == PApplet.RIGHT);
+    selections.add(selectedCharacter);
 
-        if (left) {
-            selectRelative(-1);
-        } else if (right) {
-            selectRelative(1);
-        } else if (key == ' ' || key == '\n' || key == '\r') {
-            confirmSelection();
-        }
+    if (selections.size() < gameMode.getHumanPlayerCount()) {
+      selectRelative(1);
+      return;
     }
 
-    private String getHeading() {
-        if (gameMode == GameMode.SINGLE_PLAYER
-                || gameMode == GameMode.VS_AI) {
-            return "SELECT YOUR CHARACTER";
-        }
+    startGame();
+  }
 
-        return "PLAYER "
-                + (selections.size() + 1)
-                + ": SELECT YOUR CHARACTER";
+  private void startGame() {
+    List<PlayerConfig> playerConfigs = new ArrayList<>();
+
+    playerConfigs.add(
+        new PlayerConfig(
+            playerNames.get(0), selections.get(0), 1, ControllerType.HUMAN_PLAYER_ONE));
+
+    if (gameMode == GameMode.LOCAL_MULTIPLAYER) {
+      playerConfigs.add(
+          new PlayerConfig(
+              playerNames.get(1), selections.get(1), 2, ControllerType.HUMAN_PLAYER_TWO));
     }
 
-    private void selectRelative(int direction) {
-        int candidateIndex = selectedIndex;
-
-        for (int attempt = 0;
-             attempt < characters.length;
-             attempt++) {
-            candidateIndex = Math.floorMod(
-                    candidateIndex + direction,
-                    characters.length
-            );
-
-            if (!selections.contains(
-                    characters[candidateIndex]
-            )) {
-                select(candidateIndex);
-                return;
-            }
-        }
+    if (gameMode == GameMode.VS_AI) {
+      playerConfigs.add(new PlayerConfig("AI", selectAiCharacter(), 2, ControllerType.AI));
     }
 
+    GameConfig gameConfig = new GameConfig(gameMode, playerConfigs);
 
-    private void confirmSelection() {
-        Character selectedCharacter =
-                characters[selectedIndex];
+    gameContext.getStateManager().setState(new GamePlayState(gameContext, gameConfig));
+  }
 
-        if (selections.contains(selectedCharacter)) {
-            return;
-        }
+  private Character selectAiCharacter() {
+    List<Character> availableCharacters =
+        Arrays.stream(characters).filter(character -> !selections.contains(character)).toList();
 
-        selections.add(selectedCharacter);
-
-        if (selections.size()
-                < gameMode.getHumanPlayerCount()) {
-            selectRelative(1);
-            return;
-        }
-
-        startGame();
-    }
-
-    private void startGame() {
-        List<PlayerConfig> playerConfigs = new ArrayList<>();
-
-        playerConfigs.add(new PlayerConfig(
-                selections.get(0),
-                1,
-                ControllerType.HUMAN_PLAYER_ONE
-        ));
-
-        if (gameMode == GameMode.LOCAL_MULTIPLAYER) {
-            playerConfigs.add(new PlayerConfig(
-                    selections.get(1),
-                    2,
-                    ControllerType.HUMAN_PLAYER_TWO
-            ));
-        }
-
-        if (gameMode == GameMode.VS_AI) {
-            playerConfigs.add(new PlayerConfig(
-                    selectAiCharacter(),
-                    2,
-                    ControllerType.AI
-            ));
-        }
-
-        GameConfig gameConfig = new GameConfig(
-                gameMode,
-                playerConfigs
-        );
-
-        gameContext.getStateManager().setState(
-                new GamePlayState(
-                        gameContext,
-                        gameConfig
-                )
-        );
-
-    }
-
-    private Character selectAiCharacter() {
-        List<Character> availableCharacters =
-                Arrays.stream(characters)
-                        .filter(character ->
-                                !selections.contains(character))
-                        .toList();
-
-        return availableCharacters.get(
-                random.nextInt(
-                        availableCharacters.size()
-                )
-        );
-    }
+    return availableCharacters.get(random.nextInt(availableCharacters.size()));
+  }
 }

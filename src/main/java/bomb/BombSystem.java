@@ -14,6 +14,8 @@ public class BombSystem {
 
     private final List<Bomb> bombs = new ArrayList<>();
     private final List<Explosion> explosions = new ArrayList<>();
+    private final Map<Player, Player> killersByVictim =
+            new IdentityHashMap<>();
 
     public void placeBomb(Player player, GameMap map) {
         if (!player.canPlaceBomb()) {
@@ -40,7 +42,8 @@ public class BombSystem {
         player.onBombPlaced();
     }
 
-    public void update(float deltaTime, GameMap map, List<Player> players, PowerUpSystem  powerUpSystem) {
+    public int update(float deltaTime, GameMap map, List<Player> players, PowerUpSystem  powerUpSystem) {
+        int startedExplosionCount = 0;
         Queue<Bomb> pendingExplosions = new ArrayDeque<>();
 
         // Update Bombs
@@ -63,7 +66,13 @@ public class BombSystem {
             bomb.getOwner().onBombExploded();
 
             Set<Position> blast = createBlast(bomb, map, powerUpSystem);
-            explosions.add(new Explosion(blast));
+            explosions.add(
+                    new Explosion(
+                            blast,
+                            bomb.getOwner()
+                    )
+            );
+            startedExplosionCount++;
 
             for (Bomb otherBomb : new ArrayList<>(bombs)) {
                 if (blast.contains(otherBomb.getPosition())) {
@@ -80,23 +89,67 @@ public class BombSystem {
         explosions.removeIf(Explosion::isFinished);
 
         damagePlayers(map, players);
+
+        return startedExplosionCount;
     }
 
-    private void damagePlayers(GameMap map, List<Player> players) {
+    private void damagePlayers(
+            GameMap map,
+            List<Player> players
+    ) {
         for (Player player : players) {
             if (!player.isAlive()) {
                 continue;
             }
 
-            Position playerPosition = map.worldToTile(player.getX(), player.getY());
+            Position playerPosition =
+                    map.worldToTile(
+                            player.getX(),
+                            player.getY()
+                    );
 
-            for (Explosion explosion : explosions) {
-                if (explosion.getPositions().contains(playerPosition)) {
-                    player.kill();
-                    break;
-                }
+            Player killer = findKiller(
+                    player,
+                    playerPosition
+            );
+
+            if (killer == null) {
+                continue;
             }
+
+            killersByVictim.put(
+                    player,
+                    killer
+            );
+
+            player.kill();
         }
+    }
+
+    private Player findKiller(
+            Player victim,
+            Position victimPosition
+    ) {
+        Player selfKillSource = null;
+
+        for (Explosion explosion : explosions) {
+            if (!explosion.contains(
+                    victimPosition
+            )) {
+                continue;
+            }
+
+            Player explosionOwner =
+                    explosion.getOwner();
+
+            if (explosionOwner != victim) {
+                return explosionOwner;
+            }
+
+            selfKillSource = explosionOwner;
+        }
+
+        return selfKillSource;
     }
 
     private Set<Position> createBlast(Bomb bomb, GameMap map, PowerUpSystem powerUpSystem) {
@@ -156,6 +209,47 @@ public class BombSystem {
         return null;
     }
 
+    public Set<Position> previewBlast(Position center, int range, int burst, GameMap map) {
+        Set<Position> blast = new HashSet<>();
+        blast.add(center);
+
+        addPreviewDirection(blast, center, 1, 0, range, burst, map);
+        addPreviewDirection(blast, center, -1, 0, range, burst, map);
+        addPreviewDirection(blast, center, 0, 1, range, burst, map);
+        addPreviewDirection(blast, center, 0, -1, range, burst, map);
+
+        return blast;
+    }
+
+    private void addPreviewDirection(Set<Position> blast, Position center, int directionX, int directionY, int range, int burst, GameMap map) {
+        int destroyedWalls = 0;
+
+        for (int distance = 1; distance <= range; distance ++) {
+            int column = center.column() + directionX * distance;
+            int row = center.row() + directionY * distance;
+
+            if (!map.isInside(column, row)) {
+                return;
+            }
+
+            TileType tile = map.getTile(column, row);
+
+            if (tile == TileType.UNBREAKABLE_WALL) {
+                return;
+            }
+
+            blast.add(new Position(column, row));
+
+            if (map.isBreakable(column, row)) {
+                destroyedWalls ++;
+
+                if (destroyedWalls >= burst) {
+                    return;
+                }
+            }
+        }
+    }
+
 
     public List<Bomb> getBombs() {
         return bombs;
@@ -163,5 +257,13 @@ public class BombSystem {
 
     public List<Explosion> getExplosions() {
         return explosions;
+    }
+
+    public float getFuseTime() {
+        return FUSE_TIME;
+    }
+
+    public Player getKiller(Player victim) {
+        return killersByVictim.get(victim);
     }
 }

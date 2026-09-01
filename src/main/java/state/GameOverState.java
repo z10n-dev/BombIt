@@ -2,75 +2,219 @@ package state;
 
 import core.GameContext;
 import core.Viewport;
-import player.Player;
+import game.GameOutcome;
+import game.GameResult;
+import highscore.HighScoreSaveResult;
+import highscore.HighScoreService;
 import processing.core.PImage;
 import style.Colors;
 import ui.Button;
-import ui.Typography;
 
 public class GameOverState extends GameState {
 
-    private final Player winner;
-    private final String resultMessage;
+    private final GameResult result;
+    private final HighScoreSaveResult saveResult;
+
     private final Button backButton;
+    private final Button highScoreButton;
 
-    public GameOverState(GameContext gameContext, Player winner, String resultMessage) {
+    public GameOverState(
+            GameContext gameContext,
+            GameResult result,
+            HighScoreSaveResult saveResult
+    ) {
         super(gameContext);
-        this.winner = winner;
-        this.resultMessage = resultMessage;
 
-        this.backButton = new Button(
-                Viewport.WIDTH / 2f - 150,
-                800,
+        this.result = result;
+        this.saveResult = saveResult;
+
+        backButton = new Button(
+                Viewport.WIDTH / 2f - 320,
+                820,
                 300,
                 80,
                 "BACK",
-                ()  -> {
-                    gameContext.getStateManager().setState(new MenuState(gameContext));
-                }
+                this::goBack
+        );
+
+        highScoreButton = new Button(
+                Viewport.WIDTH / 2f + 20,
+                820,
+                300,
+                80,
+                "HIGHSCORES",
+                this::showHighScores
         );
     }
 
     @Override
     public void update() {
-
     }
 
     @Override
     public void draw() {
-        float gameMouseX = gameContext.getViewport().screenToGameX(app.mouseX);
-        float gameMouseY = gameContext.getViewport().screenToGameY(app.mouseY);
+        float mouseX =
+                gameContext.getViewport()
+                        .screenToGameX(app.mouseX);
+
+        float mouseY =
+                gameContext.getViewport()
+                        .screenToGameY(app.mouseY);
 
         app.background(Colors.BACKGROUND);
-        Typography.h1(app);
-        app.text("GAME OVER", Viewport.WIDTH / 2f, 150);
 
-        Typography.h2(app);
-        app.text(resultMessage, Viewport.WIDTH / 2f, 250);
+        gameContext.getTypography().h1();
 
-        if (winner != null) {
-            PImage playerImage = gameContext.getAssetManager().loadImage(winner.getCharacter().getImageFileName());
-            app.centeredImage(playerImage, Viewport.WIDTH / 2f, 525, 6f);
+        app.text(
+                "GAME OVER",
+                Viewport.WIDTH / 2f,
+                130
+        );
+
+        gameContext.getTypography().h2();
+
+        app.text(
+                result.message(),
+                Viewport.WIDTH / 2f,
+                250
+        );
+
+        if (result.winner() != null) {
+            PImage playerImage =
+                    gameContext.getAssetManager()
+                            .loadImage(
+                                    result.winner()
+                                            .character()
+                                            .getImageFileName()
+                            );
+
+            app.centeredImage(
+                    playerImage,
+                    Viewport.WIDTH / 2f,
+                    500,
+                    5f
+            );
         }
 
-        backButton.draw(app, gameMouseX, gameMouseY);
+        gameContext.getTypography().h2();
 
-        Typography.hint(app);
-        app.text("Press 'ENTER' or 'SPACE' to continue", Viewport.WIDTH / 2f, 920);
+        app.text(
+                "TIME: "
+                        + HighScoreService.formatDuration(
+                        result.durationMillis()
+                ),
+                Viewport.WIDTH / 2f,
+                700
+        );
+
+        drawSaveResult();
+
+        backButton.draw(
+                app,
+                mouseX,
+                mouseY
+        );
+
+        highScoreButton.draw(
+                app,
+                mouseX,
+                mouseY
+        );
+
+        gameContext.getTypography().hint();
+
+        app.text(
+                "PRESS H TO OPEN HIGHSCORES",
+                Viewport.WIDTH / 2f,
+                950
+        );
+    }
+
+    private void drawSaveResult() {
+        String message;
+
+        if (saveResult
+                == HighScoreSaveResult.SAVED) {
+            message = "NEW PERSONAL BEST!";
+        } else if (saveResult
+                == HighScoreSaveResult.SAVED_FAILD) {
+            message =
+                    "HIGHSCORE COULD NOT BE SAVED";
+        } else if (result.outcome()
+                == GameOutcome.WIN
+                && !result.winnerCausedElimination()) {
+            message =
+                    "NO HIGHSCORE: OPPONENT SELF-DESTRUCTED";
+        } else {
+            message = "";
+        }
+
+        if (message.isEmpty()) {
+            return;
+        }
+
+        gameContext.getTypography().hint();
+
+        app.text(
+                message,
+                Viewport.WIDTH / 2f,
+                750
+        );
     }
 
     @Override
-    public void mousePressed(int mouseX, int mouseY) {
-        float gameX = gameContext.getViewport().screenToGameX(mouseX);
-        float gameY = gameContext.getViewport().screenToGameY(mouseY);
+    public void mousePressed(
+            int mouseX,
+            int mouseY
+    ) {
+        float gameX =
+                gameContext.getViewport()
+                        .screenToGameX(mouseX);
 
-        backButton.mousePressed(gameX, gameY);
+        float gameY =
+                gameContext.getViewport()
+                        .screenToGameY(mouseY);
+
+        backButton.mousePressed(
+                gameX,
+                gameY
+        );
+
+        highScoreButton.mousePressed(
+                gameX,
+                gameY
+        );
     }
 
     @Override
-    public void keyPressed(char key, int keyCode) {
-        switch (key){
-            case ' ', '\n', '\r' -> gameContext.getStateManager().setState(new MenuState(gameContext));
+    public void keyPressed(
+            char key,
+            int keyCode
+    ) {
+        if (key == 'h' || key == 'H') {
+            showHighScores();
+            return;
         }
+
+        if (key == ' '
+                || key == '\n'
+                || key == '\r') {
+            goBack();
+        }
+    }
+
+    private void goBack() {
+        gameContext.getStateManager().setState(
+                new MenuState(gameContext)
+        );
+    }
+
+    private void showHighScores() {
+        gameContext.getStateManager().setState(
+                new HighScoreState(
+                        gameContext,
+                        this
+                )
+        );
     }
 }
